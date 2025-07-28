@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+/* Font sizes */
+.text-size-small {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.text-size-medium {
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.text-size-large {
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+/* Dark mode transition */
+html {
+  transition: color 0.3s ease, background-color 0.3s ease;
+}
+
+/* If using Tailwind, ensure dark mode is enabled */
+/* tailwind.config.js */
+module.exports = {
+  darkMode: 'class',
+}

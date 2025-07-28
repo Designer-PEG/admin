@@ -1,0 +1,58 @@
+[
+  {
+    "id": 1,
+    "type": "contact",
+    "sourceSite": "Acme Inc Website",
+    "sourceUrl": "https://www.acme.com/contact",
+    "name": "John Doe",
+    "email": "john@acme.com",
+    "subject": "Partnership Inquiry",
+    "message": "Interested in discussing potential collaboration opportunities with your platform.",
+    "submittedAt": "2023-05-15T10:30:00Z",
+    "status": "Approved"
+  },
+  {
+    "id": 2,
+    "type": "contact",
+    "sourceSite": "Globex Support Portal",
+    "sourceUrl": "https://support.globex.com",
+    "name": "Jane Smith",
+    "email": "jane@globex.com",
+    "subject": "Integration Issue",
+    "message": "Getting 404 errors when connecting to your API endpoints.",
+    "submittedAt": "2023-05-16T14:45:00Z",
+    "status": "Pending"
+  },
+  {
+    "id": 3,
+    "type": "subscription",
+    "sourceSite": "Wayne Newsletter",
+    "sourceUrl": "https://newsletter.wayne.com",
+    "email": "bruce@wayne.com",
+    "subscribed": true,
+    "submittedAt": "2023-05-17T09:15:00Z",
+    "status": "Approved"
+  },
+  {
+    "id": 4,
+    "type": "contact",
+    "sourceSite": "Stark Developer Portal",
+    "sourceUrl": "https://developer.stark.com",
+    "name": "Tony Stark",
+    "email": "tony@stark.com",
+    "subject": "API Access Request",
+    "message": "Requesting elevated permissions for our enterprise integration.",
+    "submittedAt": "2023-05-18T16:20:00Z",
+    "status": "Pending"
+  },
+  {
+    "id": 5,
+    "type": "subscription",
+    "sourceSite": "Initech Marketing",
+    "sourceUrl": "https://marketing.initech.com",
+    "email": "peter@initech.com",
+    "subscribed": false,
+    "submittedAt": "2023-05-19T11:05:00Z",
+    "status": "Rejected"
+  }
+]
