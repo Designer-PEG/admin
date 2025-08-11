@@ -1,5 +1,5 @@
 // utils/constants.js
-export const dataSources = [  // Add 'export' here
+export const dataSources = [
   {
     name: 'Career Subscription - Professional Edge Global',
     url: 'https://script.google.com/macros/s/AKfycby4kMORYTPDmHJr3iaFK05KP4CBNvDGFHub5Xr2xSiOM4BWB0GRZlIFtryUYs3395AT/exec',
@@ -24,6 +24,11 @@ export const dataSources = [  // Add 'export' here
     name: 'Contact Form Submission - S. Suresh & Associates',
     url: 'https://script.google.com/macros/s/AKfycbwdN3RsbBL9870hsny1l0IRzqjgi6H-565LXpbI8yEwM5Od1tRlIcohjMzf78WxC-og/exec',
     fields: ['name', 'email', 'subject', 'message']
+  },
+  {
+    name: 'Claim Form Submission - Everest Claims and Advisory',
+    url: 'https://script.google.com/macros/s/AKfycbyFSj59-mDvYA1L1qB2t7q4_bPGi8ukr_LbIMtGqhIshr9BBELC_7TOKLVHbzII_4IjsA/exec',
+    fields: ['name', 'email', 'message']
   }
 ];
 

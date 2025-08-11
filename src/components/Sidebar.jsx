@@ -4,7 +4,6 @@ const Sidebar = ({ currentUser, handleLogout }) => {
   const menuItems = [
     { name: 'dashboard', icon: '📊', path: '/dashboard' },
     { name: 'submissions', icon: '📝', path: '/submissions' },
-    { name: 'trainingform', icon: '📝', path: '/trainingform' },
     { name: 'settings', icon: '⚙️', path: '/settings' },
   ]
 
