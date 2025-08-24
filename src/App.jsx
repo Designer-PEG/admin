@@ -9,6 +9,7 @@ import Settings from './pages/Settings';
 import Login from './pages/Login';
 import { applySavedSettings } from './components/applySettings';
 import { getSession, clearSession, isSessionValid, updateSessionTimestamp } from './utils/session';
+import { supabase } from './supabase'; // Supabase client ready for use
 
 const DashboardLayout = ({ currentUser, onLogout }) => {
   // Update session timestamp on any interaction

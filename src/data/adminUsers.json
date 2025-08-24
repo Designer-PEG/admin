@@ -1,17 +1,17 @@
 [
   {
     "id": 1,
-    "username": "admin",
-    "password": "admin123",
-    "name": "Main Administrator",
-    "email": "admin@example.com"
+    "username": "adminsuresh",
+    "password": "Password@123459",
+    "name": "CA. Suresh Sharma",
+    "email": "2015casuresh@gmail.com"
   },
   {
     "id": 3,
-    "username": "admin1",
-    "password": "admin-123",
+    "username": "admindamodar",
+    "password": "Admin@123",
     "name": "Administrator",
-    "email": "admin@example.com"
+    "email": "damodarpoudel@test.com"
   },
   {
     "id": 2,
