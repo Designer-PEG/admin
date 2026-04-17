@@ -1,9 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import { FiRefreshCw, FiExternalLink, FiClock, FiAlertCircle } from 'react-icons/fi';
+import Button from '../components/ui/Button';
+import Loader from '../components/ui/Loader';
+import DataTable from '../components/tables/DataTable';
 
 const TrainingForm = () => {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   const fetchSubmissions = async () => {
     try {
@@ -20,12 +25,12 @@ const TrainingForm = () => {
       
       const result = await response.json();
       
-      // Validate the response is a 2D array
       if (!Array.isArray(result) || !result.every(Array.isArray)) {
         throw new Error('Invalid data format: Expected 2D array');
       }
       
       setSubmissions(result);
+      setLastUpdated(new Date());
     } catch (err) {
       setError(err.message);
       console.error('Error fetching submissions:', err);
@@ -39,106 +44,89 @@ const TrainingForm = () => {
     fetchSubmissions();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        <span className="ml-3 text-gray-600">Loading training submissions...</span>
-      </div>
-    );
+  // Transform 2D array to Objects for DataTable
+  const { columns, data } = useMemo(() => {
+    if (submissions.length === 0) return { columns: [], data: [] };
+
+    const headers = submissions[0];
+    const rows = submissions.slice(1);
+
+    const cols = headers.map((header, index) => ({
+      key: `col_${index}`,
+      label: header,
+      render: (row) => <span className="text-sm text-gray-900 dark:text-gray-200">{row[`col_${index}`] || '—'}</span>
+    }));
+
+    const tableData = rows.map((row, rowIndex) => {
+      const rowObj = { id: rowIndex };
+      row.forEach((cell, cellIndex) => {
+        rowObj[`col_${cellIndex}`] = cell;
+      });
+      return rowObj;
+    });
+
+    return { columns: cols, data: tableData };
+  }, [submissions]);
+
+  if (loading && submissions.length === 0) {
+    return <Loader text="Loading training submissions..." />;
   }
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8">
-      <div className="sm:flex sm:items-center mb-6">
-        <div className="sm:flex-auto">
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-            Training Form Submissions
-          </h1>
-          <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-            {submissions.length > 0 
-              ? `Showing ${submissions.length - 1} submissions` 
-              : 'No submissions available'}
-          </p>
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Training Form Submissions</h1>
+          <div className="flex items-center gap-3 mt-1 text-sm text-gray-500 dark:text-gray-400">
+            <span>{data.length} {data.length === 1 ? 'submission' : 'submissions'}</span>
+            {lastUpdated && (
+              <span className="flex items-center gap-1">
+                <FiClock className="w-3.5 h-3.5" />
+                Updated {lastUpdated.toLocaleTimeString()}
+              </span>
+            )}
+          </div>
         </div>
-        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-          <button
-            onClick={fetchSubmissions}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            disabled={loading}
+        <div className="flex items-center gap-3">
+          <Button variant="secondary" size="sm" onClick={fetchSubmissions} isLoading={loading}>
+            <FiRefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          <a
+            href="https://docs.google.com/spreadsheets/d/1B9R7-u2B8R58bE_Xy9V3Q0-T8vUj-8_0-v1_O_W-Y/edit"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center px-3 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
           >
-            {loading ? 'Refreshing...' : 'Refresh Data'}
-          </button>
+            <FiExternalLink className="mr-1.5" /> View Sheet
+          </a>
         </div>
       </div>
 
-      {error ? (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-red-700">
-                {error}
-                <button
-                  onClick={fetchSubmissions}
-                  className="ml-2 text-sm font-medium text-red-700 underline hover:text-red-600"
-                >
-                  Try again
-                </button>
-              </p>
-            </div>
+      {error && (
+        <div className="p-4 bg-red-50 dark:bg-red-900/10 text-red-700 dark:text-red-400 text-sm rounded-xl border border-red-100 dark:border-red-900/30 flex items-start gap-3">
+          <FiAlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
+          <div className="space-y-2">
+            <p className="font-semibold">Failed to fetch data</p>
+            <p>{error}</p>
+            <button
+              onClick={fetchSubmissions}
+              className="text-xs font-bold uppercase tracking-wider text-red-800 dark:text-red-300 hover:text-red-900 dark:hover:text-red-200 underline"
+            >
+              Try Again
+            </button>
           </div>
         </div>
-      ) : (
-        <div className="mt-8 overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:-mx-6 md:mx-0 md:rounded-lg">
-          <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-600">
-            {submissions.length > 0 && (
-              <thead className="bg-gray-50 dark:bg-gray-800">
-                <tr>
-                  {submissions[0].map((header, index) => (
-                    <th
-                      key={index}
-                      scope="col"
-                      className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 sm:pl-6"
-                    >
-                      {header}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-            )}
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900">
-              {submissions.length > 1 ? (
-                submissions.slice(1).map((row, rowIndex) => (
-                  <tr key={rowIndex} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                    {row.map((cell, cellIndex) => (
-                      <td
-                        key={cellIndex}
-                        className="whitespace-nowrap py-4 pl-4 pr-3 text-sm text-gray-900 dark:text-gray-100 sm:pl-6"
-                      >
-                        {cell || '-'}
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td 
-                    colSpan={submissions[0]?.length || 1}
-                    className="py-4 text-center text-sm text-gray-500"
-                  >
-                    No training submissions found
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
       )}
+
+      {/* Main Table */}
+      <DataTable
+        columns={columns}
+        data={data}
+        rowKey="id"
+        emptyMessage="No training submissions found."
+      />
     </div>
   );
 };

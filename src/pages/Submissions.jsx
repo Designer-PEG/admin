@@ -1,337 +1,285 @@
-// components/Submissions.js
-import { useState, useEffect } from 'react';
-import { FiMail, FiUser, FiGlobe, FiClock, FiDownload, FiSearch, FiChevronDown, FiRefreshCw } from 'react-icons/fi';
-import { initializeData, fetchFreshData } from '../utils/dataService';
+import { useState, useMemo } from 'react';
+import { FiMail, FiUser, FiGlobe, FiClock, FiDownload, FiRefreshCw, FiChevronDown, FiTrash2 } from 'react-icons/fi';
+import useDataFetch from '../hooks/useDataFetch';
+import DataTable from '../components/tables/DataTable';
+import SearchInput from '../components/forms/SearchInput';
+import Badge from '../components/ui/Badge';
+import Button from '../components/ui/Button';
+import Loader from '../components/ui/Loader';
+import SubmissionModal from '../components/ui/SubmissionModal';
 
 const Submissions = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [submissions, setSubmissions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [lastUpdated, setLastUpdated] = useState(null);
+  const [siteFilter, setSiteFilter] = useState('all');
+  const [isTypeDropdownOpen, setIsTypeDropdownOpen] = useState(false);
+  const [isSiteDropdownOpen, setIsSiteDropdownOpen] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
 
-  // Load data on component mount
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const { data, error, timestamp } = await initializeData();
-        setSubmissions(data);
-        setError(error);
-        setLastUpdated(timestamp);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const { data: submissions, loading, error, lastUpdated, refresh, deleteItem } = useDataFetch();
 
-    loadData();
-  }, []);
-
-  // Add a refresh button handler
-  const handleRefresh = async () => {
-    setLoading(true);
-    try {
-      const { data, error, timestamp } = await fetchFreshData();
-      setSubmissions(data);
-      setError(error);
-      setLastUpdated(timestamp);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  /* ── Helpers ── */
   const getCompanyFromEmail = (email) => email?.split('@')[1]?.split('.')[0] || '';
 
-  const formatDate = (dateString) => {
+  const formatDate = (dateStr) => {
     try {
-      return new Date(dateString).toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric',
-        hour: '2-digit', 
-        minute: '2-digit'
+      return new Date(dateStr).toLocaleDateString('en-US', {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
       });
-    } catch {
-      return 'Invalid date';
+    } catch { return '—'; }
+  };
+
+  const getSiteBadgeVariant = (site) => {
+    const s = site.toLowerCase();
+    if (s.includes('professionaledge')) return 'primary';
+    if (s.includes('ssureshandassociates')) return 'warning';
+    return 'gray';
+  };
+
+  /* ── Filtering ── */
+  const uniqueSites = useMemo(() => {
+    const sites = submissions.map(s => s.sourceSite).filter(Boolean);
+    return ['all', ...Array.from(new Set(sites))];
+  }, [submissions]);
+
+  const filteredSubmissions = useMemo(() => {
+    return submissions.filter((s) => {
+      const q = searchTerm.toLowerCase();
+      const site = s.sourceSite;
+      
+      const matchesSearch =
+        (s.name?.toLowerCase() || '').includes(q) ||
+        (s.email?.toLowerCase() || '').includes(q) ||
+        (s.subject?.toLowerCase() || '').includes(q) ||
+        (site?.toLowerCase() || '').includes(q) ||
+        getCompanyFromEmail(s.email).toLowerCase().includes(q);
+      
+      const matchesType = typeFilter === 'all' || s.type === typeFilter;
+      const matchesSite = siteFilter === 'all' || site === siteFilter;
+      
+      return matchesSearch && matchesType && matchesSite;
+    });
+  }, [submissions, searchTerm, typeFilter, siteFilter]);
+
+  /* ── Handles ── */
+  const handleDelete = (e, id) => {
+    e.stopPropagation(); // Prevent opening detail modal
+    if (window.confirm('Are you sure you want to remove this submission from your view? (This will not affect the source Google Sheet)')) {
+      deleteItem(id);
     }
   };
 
-  const getSourceWebsite = (sourceSite) => {
-    switch(sourceSite?.toLowerCase()) {
-      case 'professionaledgeglobal':
-        return 'professionaledgeglobal.com.np';
-      case 'ssuresh & associates':
-      case 'ssureshandassociates':
-        return 'ssureshandassociates.com.np';
-      default:
-        return sourceSite || 'Unknown source';
-    }
-  };
-
+  /* ── Export ── */
   const handleExport = () => {
     const csvContent = [
       ['ID', 'Type', 'Name', 'Email', 'Company', 'Subject', 'Source', 'Submitted At'].join(','),
-      ...filteredSubmissions.map(submission => [
-        submission.id,
-        submission.type === 'contact' ? 'Contact Form' : 'Subscription',
-        submission.name,
-        submission.email,
-        getCompanyFromEmail(submission.email),
-        submission.subject,
-        getSourceWebsite(submission.sourceSite),
-        formatDate(submission.submittedAt)
-      ].map(field => `"${(field || 'N/A').toString().replace(/"/g, '""')}"`).join(','))
+      ...filteredSubmissions.map((s) =>
+        [s.id, s.type === 'contact' ? 'Contact Form' : 'Subscription', s.name, s.email,
+         getCompanyFromEmail(s.email), s.subject, s.sourceSite, formatDate(s.submittedAt)
+        ].map((f) => `"${(f || 'N/A').toString().replace(/"/g, '""')}"`).join(',')
+      )
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `submissions_export_${new Date().toISOString().slice(0,10)}.csv`);
+    link.setAttribute('download', `submissions_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
-  const filteredSubmissions = submissions.filter(submission => {
-    const matchesSearch = 
-      (submission.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-      (submission.email?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-      (submission.subject?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-      (getSourceWebsite(submission.sourceSite)?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-      getCompanyFromEmail(submission.email).toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesType = 
-      typeFilter === 'all' || 
-      (typeFilter === 'contact' && submission.type === 'contact') ||
-      (typeFilter === 'subscription' && submission.type === 'subscription');
-    
-    return matchesSearch && matchesType;
-  });
-
-  if (loading && submissions.length === 0) return <LoadingSpinner />;
-  if (error && submissions.length === 0) return <ErrorDisplay error={error} />;
-
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        {/* Header Section */}
-        <div className="px-6 py-5 border-b border-gray-200 bg-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Form Submissions</h1>
-            <div className="flex items-center mt-1 text-sm text-gray-500">
-              <span className="mr-3">
-                {filteredSubmissions.length} {filteredSubmissions.length === 1 ? 'entry' : 'entries'}
-              </span>
-              <span className="flex items-center">
-                <FiClock className="mr-1" size={14} />
-                {lastUpdated ? `Last updated ${formatDate(lastUpdated)}` : 'Loading...'}
-              </span>
-              <button 
-                onClick={handleRefresh}
-                disabled={loading}
-                className="ml-3 flex items-center text-blue-600 hover:text-blue-800 text-sm font-medium"
-              >
-                <FiRefreshCw className={`mr-1 ${loading ? 'animate-spin' : ''}`} size={14} />
-                {loading ? 'Refreshing' : 'Refresh'}
-              </button>
-            </div>
+  /* ── Table columns ── */
+  const columns = [
+    {
+      key: 'id', label: 'ID', className: 'whitespace-nowrap',
+      render: (row) => <span className="font-mono text-gray-400 dark:text-gray-600 font-medium">#{row.id}</span>
+    },
+    {
+      key: 'type', label: 'Type', className: 'whitespace-nowrap',
+      render: (row) => (
+        <Badge variant={row.type === 'contact' ? 'info' : 'primary'}>
+          {row.type === 'contact' ? <><FiUser className="mr-1 w-3 h-3 inline" />Contact</> : <><FiMail className="mr-1 w-3 h-3 inline" />Subscription</>}
+        </Badge>
+      )
+    },
+    {
+      key: 'contact', label: 'Contact',
+      render: (row) => (
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 text-sm font-semibold shrink-0 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400">
+            {(row.name || row.email).charAt(0).toUpperCase()}
           </div>
-          <button 
-            onClick={handleExport}
-            className="flex items-center px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors border border-blue-100 shadow-sm"
-            disabled={filteredSubmissions.length === 0 || loading}
-          >
-            <FiDownload className="mr-2" />
-            Export CSV
-          </button>
-        </div>
-
-        {/* Filters Section */}
-        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex flex-wrap items-center gap-3">
-          <div className="relative">
-            <button 
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="flex items-center justify-between w-48 px-3 py-2 bg-white text-sm rounded-lg border border-gray-200 hover:border-gray-300 shadow-xs"
-            >
-              <span className="text-gray-700">
-                {typeFilter === 'all' ? 'All submission types' : 
-                 typeFilter === 'contact' ? 'Contact forms only' : 'Subscriptions only'}
-              </span>
-              <FiChevronDown className={`transition-transform text-gray-500 ${isDropdownOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {isDropdownOpen && (
-              <div className="absolute z-10 mt-1 w-48 bg-white shadow-lg rounded-md py-1 border border-gray-200">
-                <button 
-                  onClick={() => { setTypeFilter('all'); setIsDropdownOpen(false); }} 
-                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50"
-                >
-                  All submission types
-                </button>
-                <button 
-                  onClick={() => { setTypeFilter('contact'); setIsDropdownOpen(false); }} 
-                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50"
-                >
-                  Contact forms only
-                </button>
-                <button 
-                  onClick={() => { setTypeFilter('subscription'); setIsDropdownOpen(false); }} 
-                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50"
-                >
-                  Subscriptions only
-                </button>
-              </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-900 truncate dark:text-white">{row.name || getCompanyFromEmail(row.email)}</p>
+            <p className="text-xs text-gray-500 truncate dark:text-gray-400">{row.email}</p>
+            {row.type === 'contact' && row.subject && (
+              <p className="text-xs text-gray-400 truncate mt-0.5 dark:text-gray-500 italic">"{row.subject}"</p>
             )}
           </div>
-          
-          <div className="relative flex-grow max-w-md">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <FiSearch className="h-4 w-4 text-gray-400" />
-            </div>
-            <input
-              type="text"
-              placeholder="Search by name, email, company or source..."
-              className="w-full pl-10 pr-4 py-2 text-sm rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none shadow-xs"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+        </div>
+      )
+    },
+    {
+      key: 'source', label: 'Website Source', className: 'whitespace-nowrap',
+      render: (row) => (
+        <div className="flex flex-col gap-1">
+          <Badge variant={getSiteBadgeVariant(row.sourceSite)}>
+            <FiGlobe className="mr-1.5 w-3 h-3 inline" />
+            {row.sourceSite}
+          </Badge>
+        </div>
+      )
+    },
+    {
+      key: 'date', label: 'Submitted At', className: 'whitespace-nowrap',
+      render: (row) => (
+        <span className="flex items-center gap-1.5 text-gray-500 text-xs dark:text-gray-400">
+          <FiClock className="w-3.5 h-3.5" />{formatDate(row.submittedAt)}
+        </span>
+      )
+    },
+    {
+      key: 'actions', label: '', className: 'text-right',
+      render: (row) => (
+        <button
+          onClick={(e) => handleDelete(e, row.id)}
+          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-all"
+          title="Remove from view"
+        >
+          <FiTrash2 className="w-4 h-4" />
+        </button>
+      )
+    }
+  ];
+
+  const filterOptions = [
+    { value: 'all', label: 'All types' },
+    { value: 'contact', label: 'Contact' },
+    { value: 'subscription', label: 'Subscription' },
+  ];
+
+  if (loading && submissions.length === 0) return <Loader text="Loading submissions..." />;
+
+  if (error && submissions.length === 0) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-xl p-5 dark:bg-red-900/10 dark:border-red-900/30 transition-colors">
+        <p className="text-sm font-medium text-red-800 dark:text-red-400">Failed to load submissions</p>
+        <p className="text-sm text-red-700 mt-1 dark:text-red-500/70">{error}</p>
+        <button onClick={() => window.location.reload()} className="mt-2 text-sm font-medium text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300 transition-colors">
+          Try again →
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Page header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Submissions</h1>
+          <div className="flex items-center gap-3 mt-1 text-sm text-gray-500 dark:text-gray-400">
+            <span className="font-medium">{filteredSubmissions.length} {filteredSubmissions.length === 1 ? 'entry' : 'entries'}</span>
+            <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-700"></span>
+            <span className="flex items-center gap-1">
+              <FiClock className="w-3.5 h-3.5" />
+              {lastUpdated ? formatDate(lastUpdated) : '—'}
+            </span>
+            <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-700"></span>
+            <button
+              onClick={refresh}
+              disabled={loading}
+              className="flex items-center gap-1 text-blue-600 hover:text-blue-700 font-medium dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+            >
+              <FiRefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? 'Refreshing' : 'Refresh'}
+            </button>
           </div>
         </div>
-
-        {/* Table Section */}
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredSubmissions.length > 0 ? (
-                filteredSubmissions.map((submission) => (
-                  <tr key={submission.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">#{submission.id}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                        submission.type === 'contact' 
-                          ? 'bg-blue-50 text-blue-700' 
-                          : 'bg-purple-50 text-purple-700'
-                      }`}>
-                        {submission.type === 'contact' ? (
-                          <>
-                            <FiUser className="mr-1.5" size={12} />
-                            Contact
-                          </>
-                        ) : (
-                          <>
-                            <FiMail className="mr-1.5" size={12} />
-                            Subscription
-                          </>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center text-blue-600 border border-blue-100">
-                          {submission.name ? submission.name.charAt(0).toUpperCase() : submission.email.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">
-                            {submission.name || getCompanyFromEmail(submission.email)}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            {submission.email}
-                          </div>
-                          {submission.type === 'contact' && submission.subject && (
-                            <div className="text-xs text-gray-400 mt-1 max-w-xs truncate">
-                              "{submission.subject}"
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        <a 
-                          href={`https://${getSourceWebsite(submission.sourceSite)}`} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="inline-flex items-center text-blue-600 hover:underline hover:text-blue-800"
-                        >
-                          <FiGlobe className="mr-1.5" size={14} />
-                          {getSourceWebsite(submission.sourceSite)}
-                        </a>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-500 flex items-center">
-                        <FiClock className="mr-1.5 flex-shrink-0" size={14} />
-                        <span>{formatDate(submission.submittedAt)}</span>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center">
-                    <div className="text-gray-400 flex flex-col items-center">
-                      <FiSearch className="h-8 w-8 mb-2" />
-                      <p className="text-sm font-medium">No submissions found</p>
-                      <p className="text-xs mt-1">Try adjusting your search or filter criteria</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <Button variant="secondary" size="sm" onClick={handleExport} disabled={filteredSubmissions.length === 0 || loading}>
+          <FiDownload className="w-3.5 h-3.5 mr-1.5" />Export CSV
+        </Button>
       </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-900/50 p-1 rounded-xl border border-gray-100 dark:border-slate-800 shadow-sm">
+        {/* Type dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => { setIsTypeDropdownOpen(!isTypeDropdownOpen); setIsSiteDropdownOpen(false); }}
+            className="flex items-center justify-between min-w-[140px] px-3 py-2 bg-gray-50/50 dark:bg-slate-800/50 text-sm rounded-lg border border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600 transition-all text-gray-700 dark:text-gray-300"
+          >
+            <span>{filterOptions.find(o => o.value === typeFilter)?.label}</span>
+            <FiChevronDown className={`ml-2 text-gray-400 transition-transform duration-200 ${isTypeDropdownOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {isTypeDropdownOpen && (
+            <div className="absolute z-10 mt-1 w-full min-w-[140px] bg-white dark:bg-slate-800 shadow-xl rounded-lg py-1 border border-gray-200 dark:border-slate-700 animate-in fade-in slide-in-from-top-1 duration-200">
+              {filterOptions.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => { setTypeFilter(opt.value); setIsTypeDropdownOpen(false); }}
+                  className={`block w-full text-left px-4 py-2 text-sm transition-colors ${typeFilter === opt.value ? 'bg-blue-50 text-blue-700 font-semibold dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Website dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => { setIsSiteDropdownOpen(!isSiteDropdownOpen); setIsTypeDropdownOpen(false); }}
+            className="flex items-center justify-between min-w-[200px] px-3 py-2 bg-gray-50/50 dark:bg-slate-800/50 text-sm rounded-lg border border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600 transition-all text-gray-700 dark:text-gray-300"
+          >
+            <span className="truncate max-w-[160px]">{siteFilter === 'all' ? 'All Websites' : siteFilter}</span>
+            <FiChevronDown className={`ml-2 text-gray-400 transition-transform duration-200 ${isSiteDropdownOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {isSiteDropdownOpen && (
+            <div className="absolute z-10 mt-1 w-full min-w-[200px] bg-white dark:bg-slate-800 shadow-xl rounded-lg py-1 border border-gray-200 dark:border-slate-700 animate-in fade-in slide-in-from-top-1 duration-200">
+              {uniqueSites.map((site) => (
+                <button
+                  key={site}
+                  onClick={() => { setSiteFilter(site); setIsSiteDropdownOpen(false); }}
+                  className={`block w-full text-left px-4 py-2 text-sm transition-colors ${siteFilter === site ? 'bg-blue-50 text-blue-700 font-semibold dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                >
+                  {site === 'all' ? 'All Websites' : site}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <SearchInput
+          value={searchTerm}
+          onChange={setSearchTerm}
+          placeholder="Search submissions..."
+          className="flex-grow max-w-md"
+        />
+      </div>
+
+      {/* Table */}
+      <DataTable
+        columns={columns}
+        data={filteredSubmissions}
+        rowKey="id"
+        emptyMessage="No submissions match your current filters."
+        onRowClick={(row) => setSelectedSubmission(row)}
+      />
+
+      {/* Detail Modal */}
+      <SubmissionModal 
+        isOpen={!!selectedSubmission} 
+        submission={selectedSubmission} 
+        onClose={() => setSelectedSubmission(null)} 
+      />
     </div>
   );
 };
-
-// Reusable components
-const LoadingSpinner = () => (
-  <div className="flex justify-center items-center h-64">
-    <div className="flex flex-col items-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
-      <p className="text-gray-500">Loading submissions...</p>
-    </div>
-  </div>
-);
-
-const ErrorDisplay = ({ error }) => (
-  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded-lg">
-      <div className="flex">
-        <div className="flex-shrink-0">
-          <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-          </svg>
-        </div>
-        <div className="ml-3">
-          <h3 className="text-sm font-medium text-red-800">Failed to load submissions</h3>
-          <p className="text-sm text-red-700 mt-1">{error}</p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="mt-2 text-sm font-medium text-red-600 hover:text-red-500"
-          >
-            Try again →
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-);
 
 export default Submissions;

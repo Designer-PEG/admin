@@ -1,269 +1,178 @@
-// components/Dashboard.js
-import { useState, useEffect } from 'react';
-import { initializeData, fetchFreshData } from '../utils/dataService';
+import { useMemo, useState } from 'react';
+import { FiFileText, FiGlobe, FiMail, FiInbox, FiRefreshCw, FiExternalLink, FiTrash2 } from 'react-icons/fi';
+import useDataFetch from '../hooks/useDataFetch';
+import StatsCard from '../components/cards/StatsCard';
+import Badge from '../components/ui/Badge';
+import Loader from '../components/ui/Loader';
+import Button from '../components/ui/Button';
+import SubmissionModal from '../components/ui/SubmissionModal';
 
+/* ── Computed stats ── */
 const Dashboard = () => {
-  const [submissions, setSubmissions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [lastUpdated, setLastUpdated] = useState(null);
-  const [isUsingCache, setIsUsingCache] = useState(false);
+  const { data: submissions, loading, error, lastUpdated, isUsingCache, refresh, deleteItem } = useDataFetch();
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
 
-  // Load data on component mount
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        const { data, error, timestamp, isCached } = await initializeData();
-        
-        setSubmissions(data || []);
-        setError(error);
-        setLastUpdated(timestamp);
-        setIsUsingCache(isCached);
-        
-        if (isCached) {
-          // If using cached data, try to fetch fresh data in background
-          const freshData = await fetchFreshData();
-          if (freshData.data && !freshData.error) {
-            setSubmissions(freshData.data);
-            setLastUpdated(freshData.timestamp);
-            setIsUsingCache(false);
-          }
-        }
-      } catch (err) {
-        setError(err.message || 'Failed to load submissions');
-      } finally {
-        setLoading(false);
-      }
-    };
+  /* ── Computed stats ── */
+  const stats = useMemo(() => [
+    { title: 'Total Submissions', value: submissions.length, icon: FiFileText },
+    { title: 'Source Websites', value: [...new Set(submissions.map((s) => s.sourceSite))].length, icon: FiGlobe },
+    { title: 'Contact Forms', value: submissions.filter((s) => s.type === 'contact').length, icon: FiMail },
+    { title: 'Subscriptions', value: submissions.filter((s) => s.type === 'subscription').length, icon: FiInbox },
+  ], [submissions]);
 
-    loadData();
-  }, []);
+  /* ── Group by source ── */
+  const submissionsBySource = useMemo(() => {
+    return submissions.reduce((acc, sub) => {
+      const key = sub.sourceSite;
+      if (!acc[key]) acc[key] = { url: sub.sourceUrl || '#', items: [] };
+      acc[key].items.push(sub);
+      return acc;
+    }, {});
+  }, [submissions]);
 
-  // Add a refresh button handler
-  const handleRefresh = async () => {
-    try {
-      setLoading(true);
-      const { data, error, timestamp } = await fetchFreshData();
-      setSubmissions(data || []);
-      setError(error);
-      setLastUpdated(timestamp);
-      setIsUsingCache(false);
-    } catch (err) {
-      setError(err.message || 'Failed to refresh data');
-    } finally {
-      setLoading(false);
+  /* ── Handles ── */
+  const handleDelete = (e, id) => {
+    e.stopPropagation();
+    if (window.confirm('Are you sure you want to remove this submission from your view?')) {
+      deleteItem(id);
     }
   };
 
-  if (loading && submissions.length === 0) return <LoadingSpinner />;
-  if (error && submissions.length === 0) return <ErrorDisplay error={error} />;
-
-  // Normalize source names and group by them
-  const normalizeSourceName = (name) => {
-    const lowerName = name.toLowerCase();
-    if (lowerName.includes('suresh') || lowerName.includes('ssuresh')) {
-      return 'S. Suresh & Associates';
-    }
-    if (lowerName.includes('professional') || lowerName.includes('edge') || lowerName.includes('global')) {
-      return 'Professional Edge Global';
-    }
-    return name;
-  };
-
-  const getSourceUrl = (name) => {
-    const normalized = normalizeSourceName(name);
-    if (normalized === 'S. Suresh & Associates') return 'https://ssureshandassociates.com.np';
-    if (normalized === 'Professional Edge Global') return 'https://professionaledgeglobal.com.np';
-    return name; // fallback to original if not one of our special cases
-  };
-
-  const stats = [
-    { name: 'Total Submissions', value: submissions.length, icon: '📋' },
-    { name: 'Source Websites', value: [...new Set(submissions.map(s => normalizeSourceName(s.sourceSite)))].length, icon: '🌐' },
-    { name: 'Contact Forms', value: submissions.filter(s => s.type === 'contact').length, icon: '✉️' },
-    { name: 'Subscriptions', value: submissions.filter(s => s.type === 'subscription').length, icon: '📩' }
-  ];
-
-  const submissionsBySource = submissions.reduce((acc, submission) => {
-    const normalizedSource = normalizeSourceName(submission.sourceSite);
-    if (!acc[normalizedSource]) {
-      acc[normalizedSource] = { 
-        url: getSourceUrl(submission.sourceSite), 
-        submissions: [] 
-      };
-    }
-    acc[normalizedSource].submissions.push(submission);
-    return acc;
-  }, {});
+  /* ── Early states ── */
+  if (loading && submissions.length === 0) return <Loader text="Loading dashboard..." />;
+  if (error && submissions.length === 0) {
+    return (
+      <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-5">
+        <p className="text-sm text-yellow-800 font-medium">⚠ {error}</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="space-y-6">
+      {/* ── Page header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Submission Dashboard</h1>
-          <p className="text-sm text-gray-500">Overview of all form submissions</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Dashboard</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Real-time overview of all website form submissions</p>
         </div>
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center gap-3">
           {lastUpdated && (
-            <div className="flex flex-col items-end">
-              <span className="text-xs md:text-sm text-gray-500">
-                Last updated: {lastUpdated.toLocaleString()}
-              </span>
-              {isUsingCache && (
-                <span className="text-xs text-yellow-600">
-                  Showing cached data - refreshing in background...
-                </span>
-              )}
-            </div>
+            <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">
+              Last update: {lastUpdated.toLocaleTimeString()}
+            </span>
           )}
-          <button 
-            onClick={handleRefresh}
-            disabled={loading}
-            className={`px-3 py-1.5 md:px-4 md:py-2 rounded-md text-sm font-medium transition-colors ${
-              loading 
-                ? 'bg-gray-200 cursor-not-allowed' 
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
+          {isUsingCache && (
+            <Badge variant="warning">Cached</Badge>
+          )}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={refresh}
+            isLoading={loading}
           >
-            {loading ? 'Refreshing...' : 'Refresh Data'}
-          </button>
+            <FiRefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* ── Stats grid ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat) => (
-          <StatCard key={stat.name} stat={stat} />
+        {stats.map((s) => (
+          <StatsCard key={s.title} title={s.title} value={s.value} icon={s.icon} />
         ))}
       </div>
 
-      {/* Error Display */}
-      {error && <ErrorDisplay error={error} />}
-
-      {/* Submissions by Source */}
-      {Object.entries(submissionsBySource).map(([sourceSite, { url, submissions }]) => (
-        <div key={sourceSite} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 md:px-6 md:py-4 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-800">{sourceSite}</h2>
-              <a 
-                href={url} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="text-xs md:text-sm text-blue-600 hover:underline flex items-center"
-              >
-                <span className="truncate max-w-xs">{url}</span>
-                <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-              </a>
-            </div>
-            <span className="px-2.5 py-0.5 bg-blue-100 text-blue-800 text-xs font-medium rounded-full whitespace-nowrap">
-              {submissions.length} {submissions.length === 1 ? 'submission' : 'submissions'}
-            </span>
-          </div>
-          
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-2 md:px-6 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                  <th className="px-4 py-2 md:px-6 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
-                  <th className="px-4 py-2 md:px-6 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Received</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {submissions.map((submission) => (
-                  <TableRow key={submission.id} submission={submission} />
-                ))}
-              </tbody>
-            </table>
-          </div>
+      {/* ── Inline error ── */}
+      {error && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800 dark:bg-yellow-900/10 dark:border-yellow-900/30 dark:text-yellow-500 transition-colors">
+          <span className="font-semibold mr-1">Notice:</span> {error}
         </div>
-      ))}
+      )}
+
+      {/* ── Sources breakdown ── */}
+      <div className="grid grid-cols-1 gap-6">
+        {Object.entries(submissionsBySource).map(([source, { url, items }]) => (
+          <div key={source} className="bg-white rounded-xl border border-gray-200 overflow-hidden dark:bg-slate-900 dark:border-slate-800 transition-colors shadow-sm">
+            {/* Source header */}
+            <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 dark:border-slate-800 dark:bg-slate-800/30">
+              <div>
+                <h2 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">{source}</h2>
+              </div>
+              <Badge variant="info">{items.length} {items.length === 1 ? 'entry' : 'entries'}</Badge>
+            </div>
+
+            {/* Source table */}
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-100 dark:divide-slate-800">
+                <thead>
+                  <tr className="bg-gray-50/50 dark:bg-slate-800/20">
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400">Type</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400">Details</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400">Received</th>
+                    <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
+                  {items.map((sub) => (
+                    <tr 
+                      key={sub.id} 
+                      onClick={() => setSelectedSubmission(sub)}
+                      className="hover:bg-gray-50 transition-colors dark:hover:bg-slate-800/30 cursor-pointer"
+                    >
+                      <td className="px-5 py-3.5 whitespace-nowrap">
+                        <Badge variant={sub.type === 'contact' ? 'info' : 'primary'}>
+                          {sub.type === 'contact' ? 'Contact' : 'Subscription'}
+                        </Badge>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {sub.type === 'contact' ? (
+                          <div className="space-y-0.5">
+                            <p className="text-sm font-medium text-gray-900 dark:text-slate-200">{sub.name || '—'}</p>
+                            <p className="text-xs text-gray-500 dark:text-slate-400">{sub.email}</p>
+                            {sub.subject && (
+                              <p className="text-xs text-gray-400 dark:text-slate-500 line-clamp-1 mt-1 italic">"{sub.subject}"</p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-gray-900 dark:text-slate-200">{sub.email}</p>
+                            <Badge variant={sub.subscribed ? 'success' : 'danger'}>
+                              {sub.subscribed ? 'Active' : 'Unsubscribed'}
+                            </Badge>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5 whitespace-nowrap text-xs text-gray-500 dark:text-slate-400 tabular-nums">
+                        {new Date(sub.submittedAt).toLocaleDateString()} {new Date(sub.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                      <td className="px-5 py-3.5 whitespace-nowrap text-right">
+                        <button
+                          onClick={(e) => handleDelete(e, sub.id)}
+                          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-colors"
+                          title="Remove from view"
+                        >
+                          <FiTrash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Detail Modal */}
+      <SubmissionModal 
+        isOpen={!!selectedSubmission} 
+        submission={selectedSubmission} 
+        onClose={() => setSelectedSubmission(null)} 
+      />
     </div>
   );
 };
-
-// Helper Components
-const LoadingSpinner = () => (
-  <div className="flex justify-center items-center h-64">
-    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-  </div>
-);
-
-const ErrorDisplay = ({ error }) => (
-  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
-    <div className="flex items-start">
-      <div className="flex-shrink-0 pt-0.5">
-        <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-        </svg>
-      </div>
-      <div className="ml-3">
-        <h3 className="text-sm font-medium text-yellow-800">Warning</h3>
-        <p className="text-sm text-yellow-700 mt-1">{error}</p>
-      </div>
-    </div>
-  </div>
-);
-
-const StatCard = ({ stat }) => (
-  <div className="bg-white p-4 rounded-lg shadow-xs border border-gray-200 hover:shadow-sm transition-shadow">
-    <div className="flex items-start">
-      <span className="text-2xl mr-3">{stat.icon}</span>
-      <div>
-        <h3 className="text-gray-500 text-xs font-medium uppercase tracking-wider">{stat.name}</h3>
-        <p className="mt-1 text-xl font-semibold text-gray-900">{stat.value.toLocaleString()}</p>
-      </div>
-    </div>
-  </div>
-);
-
-const TableRow = ({ submission }) => (
-  <tr key={submission.id} className="hover:bg-gray-50 transition-colors">
-    <td className="px-4 py-3 md:px-6 md:py-4 whitespace-nowrap">
-      <span className={`px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full ${
-        submission.type === 'contact' 
-          ? 'bg-blue-100 text-blue-800' 
-          : 'bg-purple-100 text-purple-800'
-      }`}>
-        {submission.type === 'contact' ? 'Contact Form' : 'Subscription'}
-      </span>
-    </td>
-    <td className="px-4 py-3 md:px-6 md:py-4">
-      {submission.type === 'contact' ? (
-        <div className="space-y-1">
-          <div className="font-medium text-gray-900">{submission.name || 'No name provided'}</div>
-          <div className="text-sm text-gray-500">{submission.email}</div>
-          {submission.subject && (
-            <div className="text-sm">
-              <div className="font-medium text-gray-700">{submission.subject}</div>
-              <div className="text-gray-500 mt-1 line-clamp-2">{submission.message}</div>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-1">
-          <div className="font-medium text-gray-900">{submission.email}</div>
-          <div>
-            <span className={`px-2 py-0.5 inline-flex items-center rounded-full text-xs font-medium ${
-              submission.subscribed 
-                ? 'bg-green-100 text-green-800' 
-                : 'bg-red-100 text-red-800'
-            }`}>
-              {submission.subscribed ? 'Subscribed' : 'Unsubscribed'}
-            </span>
-          </div>
-        </div>
-      )}
-    </td>
-    <td className="px-4 py-3 md:px-6 md:py-4 whitespace-nowrap text-sm text-gray-500">
-      {new Date(submission.submittedAt).toLocaleString()}
-    </td>
-  </tr>
-);
 
 export default Dashboard;

@@ -3,20 +3,31 @@ import { fetchAllData } from './api';
 import { dataSources, CACHE_KEY, CACHE_EXPIRY_MINUTES } from './constants'
 
 const transformData = (data) => {
-  return data.map((item, index) => ({
-    id: `${index + 1}`,
-    sourceSite: item._source,
-    sourceUrl: dataSources.find(src => src.name === item._source)?.url || '',
-    type: item._source.includes('Subscription') || item._source.includes('Consultation') 
-      ? 'subscription' 
-      : 'contact',
-    submittedAt: item.timestamp || new Date().toISOString(),
-    name: item.name || 'Not provided',
-    email: item.email || 'No email',
-    subject: item.subject || item.company || 'No subject',
-    message: item.message || 'No message provided',
-    subscribed: true
-  }));
+  const normalize = (name) => {
+    const lower = name.toLowerCase();
+    if (lower.includes('suresh') || lower.includes('ssuresh')) return 'ssureshandassociates.com.np';
+    if (lower.includes('professional') || lower.includes('edge') || lower.includes('global')) return 'professionaledgeglobal.com.np';
+    if (lower.includes('everest') || lower.includes('claims')) return 'everestclaims.com.np';
+    return name;
+  };
+
+  return data.map((item, index) => {
+    const site = normalize(item._source);
+    return {
+      id: `${index + 1}`,
+      sourceSite: site,
+      sourceUrl: `https://${site}`,
+      type: item._source.includes('Subscription') || item._source.includes('Consultation') 
+        ? 'subscription' 
+        : 'contact',
+      submittedAt: item.timestamp || new Date().toISOString(),
+      name: item.name || 'Not provided',
+      email: item.email || 'No email',
+      subject: item.subject || item.company || 'No subject',
+      message: item.message || 'No message provided',
+      subscribed: true
+    };
+  });
 };
 
 // Get cached data if valid

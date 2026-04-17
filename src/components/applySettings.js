@@ -7,11 +7,17 @@ export const applySavedSettings = () => {
   const savedSettings = localStorage.getItem('siteSettings');
   const settings = savedSettings ? JSON.parse(savedSettings) : defaultSettings;
 
-  // Apply font size
-  document.documentElement.className = `text-size-${settings.fontSize}`;
+  // Font size management
+  const fontSizeClasses = ['text-size-small', 'text-size-medium', 'text-size-large'];
+  document.documentElement.classList.remove(...fontSizeClasses);
+  document.documentElement.classList.add(`text-size-${settings.fontSize}`);
 
-  // Apply dark mode
-  document.documentElement.classList.toggle('dark', settings.darkMode);
+  // Dark mode management
+  if (settings.darkMode) {
+    document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+  }
 };
 
 export const getCurrentSettings = () => {

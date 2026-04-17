@@ -32,5 +32,5 @@ export const dataSources = [
   }
 ];
 
-export const CACHE_KEY = 'submissions_data_cache';
+export const CACHE_KEY = 'submissions_data_cache_v2';
 export const CACHE_EXPIRY_MINUTES = 5;
